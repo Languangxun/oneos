@@ -1,0 +1,12 @@
+[Unit]
+Description=OneOS Session Daemon
+Requires=oneosd.socket
+After=oneosd.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/oneosd
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

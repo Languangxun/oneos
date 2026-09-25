@@ -1,0 +1,10 @@
+NAME="OneOS"
+PRETTY_NAME="OneOS 0.0.1"
+ID=oneos
+ID_LIKE=debian
+VERSION_ID="0.0.1"
+VERSION="0.0.1"
+VERSION_CODENAME=trixie
+HOME_URL="https://github.com/Languangxun/oneos"
+SUPPORT_URL="https://github.com/Languangxun/oneos/issues"
+OS_NAME="OneOS"

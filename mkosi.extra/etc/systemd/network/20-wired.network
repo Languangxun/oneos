@@ -1,0 +1,6 @@
+[Match]
+Kind=ether
+
+[Network]
+DHCP=yes
+IPv6AcceptRA=yes
