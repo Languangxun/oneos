@@ -1,10 +1,11 @@
 CARGO ?= $(shell command -v cargo 2>/dev/null || echo $(HOME)/.cargo/bin/cargo)
-MKOSI ?= sudo mkosi
+MKOSI ?= mkosi
+SUDO ?= sudo
 MUSL := x86_64-unknown-linux-musl
 BIN_DIR := mkosi.extra/usr/bin
 DEV_SOCKET ?= /tmp/oneos-dev.sock
 
-.PHONY: all deps genkey build image run ssh shell dev fmt lint test clean
+.PHONY: all deps genkey build image run run-serial debug ssh shell dev fmt lint test clean
 
 all: image
 
@@ -15,7 +16,7 @@ deps:
 		dosfstools e2fsprogs
 
 genkey:
-	$(MKOSI) genkey
+	$(SUDO) $(MKOSI) genkey
 
 build:
 	$(CARGO) build --release --target $(MUSL) -p oneosd -p oneos
@@ -24,16 +25,22 @@ build:
 	cp target/$(MUSL)/release/oneos $(BIN_DIR)/
 
 image: build
-	$(MKOSI) -f
+	$(SUDO) $(MKOSI) -f
 
 run:
-	$(MKOSI) vm
+	$(SUDO) env PIPEWIRE_RUNTIME_DIR=/run/user/$(shell id -u) $(MKOSI) vm
+
+run-serial:
+	$(SUDO) $(MKOSI) --console=interactive vm
+
+debug:
+	$(SUDO) $(MKOSI) --console=interactive --qemu-args="-device virtio-vga" vm
 
 ssh:
-	$(MKOSI) ssh
+	$(SUDO) $(MKOSI) ssh
 
 shell:
-	$(MKOSI) shell
+	$(SUDO) $(MKOSI) shell
 
 dev:
 	ONEO_SOCKET=$(DEV_SOCKET) ./scripts/dev.sh $(ARGS)

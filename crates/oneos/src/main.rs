@@ -1,4 +1,5 @@
-use oneos_proto::{Method, Request, Response, Status, call, connect};
+use oneos_proto::{Method, Request, Response, ServiceInfo, SessionState, Status, call, connect};
+use serde_json::{Value, json};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -7,6 +8,9 @@ fn main() {
     let outcome = match command {
         "status" => status(),
         "ping" => ping(),
+        "session" => session(args.get(1).map(String::as_str).unwrap_or("status")),
+        "service" => service(&args),
+        "logs" => logs(&args),
         "poweroff" => action(Method::Poweroff),
         "reboot" => action(Method::Reboot),
         "version" => {
@@ -30,7 +34,10 @@ fn main() {
 }
 
 fn usage() {
-    println!("usage: oneos <status|ping|poweroff|reboot|version|help>");
+    println!("usage: oneos <status|ping|session|service|logs|poweroff|reboot|version|help>");
+    println!("       oneos session <status|start|stop>");
+    println!("       oneos service <list|status|start|stop|restart> [unit]");
+    println!("       oneos logs [-u unit] [-n lines]");
 }
 
 fn status() -> Result<(), i32> {
@@ -57,18 +64,120 @@ fn ping() -> Result<(), i32> {
     Ok(())
 }
 
+fn session(subcommand: &str) -> Result<(), i32> {
+    let method = match subcommand {
+        "status" => Method::SessionStatus,
+        "start" => Method::SessionStart,
+        "stop" => Method::SessionStop,
+        unknown => {
+            eprintln!("oneos: unknown session command: {unknown}");
+            return Err(2);
+        }
+    };
+
+    let response = request(method)?;
+    if let Some(value) = response.result
+        && let Ok(state) = serde_json::from_value::<SessionState>(value)
+    {
+        println!("Session      {}", state.state);
+    }
+    Ok(())
+}
+
+fn service(args: &[String]) -> Result<(), i32> {
+    let subcommand = args.get(1).map(String::as_str).unwrap_or("list");
+
+    if subcommand == "list" {
+        let response = request_params(Method::ServiceList, json!({}))?;
+        let services: Vec<ServiceInfo> = response
+            .result
+            .and_then(|value| serde_json::from_value(value).ok())
+            .unwrap_or_default();
+        for service in services {
+            println!(
+                "{:<40} {:<8} {:<10} {}",
+                service.unit, service.active, service.sub, service.description
+            );
+        }
+        return Ok(());
+    }
+
+    let method = match subcommand {
+        "status" => Method::ServiceStatus,
+        "start" => Method::ServiceStart,
+        "stop" => Method::ServiceStop,
+        "restart" => Method::ServiceRestart,
+        unknown => {
+            eprintln!("oneos: unknown service command: {unknown}");
+            return Err(2);
+        }
+    };
+
+    let Some(unit) = args.get(2) else {
+        eprintln!("oneos: unit name required");
+        return Err(2);
+    };
+
+    let response = request_params(method, json!({ "unit": unit }))?;
+    if let Some(value) = response.result
+        && let Ok(info) = serde_json::from_value::<ServiceInfo>(value)
+    {
+        println!("Unit         {}", info.unit);
+        println!("Active       {} ({})", info.active, info.sub);
+        println!("Description  {}", info.description);
+    }
+    Ok(())
+}
+
+fn logs(args: &[String]) -> Result<(), i32> {
+    let mut unit: Option<String> = None;
+    let mut lines: Option<u32> = None;
+    let mut iter = args.iter().skip(1);
+
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "-u" | "--unit" => unit = iter.next().cloned(),
+            "-n" | "--lines" => lines = iter.next().and_then(|value| value.parse().ok()),
+            unknown => {
+                eprintln!("oneos: unknown logs option: {unknown}");
+                return Err(2);
+            }
+        }
+    }
+
+    let response = request_params(Method::Logs, json!({ "unit": unit, "lines": lines }))?;
+    if let Some(value) = response.result
+        && let Some(text) = value.get("text").and_then(|text| text.as_str())
+    {
+        print!("{text}");
+        if !text.ends_with('\n') {
+            println!();
+        }
+    }
+    Ok(())
+}
+
 fn action(method: Method) -> Result<(), i32> {
     request(method)?;
     Ok(())
 }
 
 fn request(method: Method) -> Result<Response, i32> {
+    request_params(method, Value::Null)
+}
+
+fn request_params(method: Method, params: Value) -> Result<Response, i32> {
     let mut stream = connect().map_err(|err| {
         eprintln!("oneos: cannot connect to oneosd: {err}");
         3
     })?;
 
-    let response = call(&mut stream, &Request::new(1, method)).map_err(|err| {
+    let request = Request {
+        id: 1,
+        method,
+        params,
+    };
+    let response = call(&mut stream, &request).map_err(|err| {
         eprintln!("oneos: request failed: {err}");
         3
     })?;

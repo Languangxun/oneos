@@ -10,16 +10,18 @@
 
 ## v0.0.2 图形会话
 
-- [ ] oneos-session：登录后启动图形会话（基于 systemd-logind）
-- [ ] Wayland 合成器（起步用 cage，长期基于 smithay 自研）
-- [ ] 首个窗口应用（终端）
-- [ ] oneosd 增加会话 API（list / start / stop）
-- [ ] 镜像加入 GPU/输入法所需固件与 mesa
+- [x] oneos-session：由 systemd 启动图形会话（`oneos session start`）
+- [x] Wayland 合成器（cage 起步）
+- [x] 首个窗口应用（foot 终端）
+- [x] oneosd 会话 API（status / start / stop）
+- [x] 中文字体（fonts-noto-cjk）
+- [ ] 输入法（依赖合成器实现 input-method 协议，随自研合成器推进）
+- [ ] 自研合成器（基于 smithay）
 
 ## v0.0.3 系统管理
 
-- [ ] `oneos service`（list / start / stop / status）
-- [ ] `oneos logs`（转发 journal）
+- [x] `oneos service`（list / status / start / stop / restart）
+- [x] `oneos logs`（journal 转发）
 - [ ] 系统设置面板
 
 ## v0.0.4 应用与差异化

@@ -1,0 +1,23 @@
+[Unit]
+Description=OneOS Graphical Session
+Documentation=https://github.com/Languangxun/oneos
+Conflicts=getty@tty1.service
+Wants=systemd-udev-settle.service
+After=systemd-udev-settle.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+RuntimeDirectory=oneos-session
+RuntimeDirectoryMode=0700
+Environment=XDG_RUNTIME_DIR=/run/oneos-session
+Environment=XDG_SESSION_TYPE=wayland
+Environment=LIBSEAT_BACKEND=builtin
+Environment=WLR_RENDERER=pixman
+ExecStart=/usr/bin/cage -s -- /usr/bin/foot
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=5
+
+[Install]
+WantedBy=graphical.target

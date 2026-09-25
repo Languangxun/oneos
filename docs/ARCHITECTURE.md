@@ -5,7 +5,7 @@
 | 层 | 组件 | 状态 |
 |---|---|---|
 | 应用 | OneOS 应用 | 规划中 |
-| 图形会话 | oneos-session + Wayland 合成器 | 规划中（v0.0.2） |
+| 图形会话 | oneos-session（cage 合成器 + foot） | 已有 |
 | 系统服务 | `oneosd`（unix socket JSON API） | 已有 |
 | 基础系统 | systemd、networkd、resolved、dbus、openssh | 已有 |
 | 内核 | Debian linux-image-amd64 | 已有 |
@@ -57,7 +57,11 @@ scripts/dev.sh         本机开发脚本（不启动虚拟机）
 {"id":1,"ok":false,"error":{"code":"dev_mode","message":"power operations are disabled in dev mode"}}
 ```
 
-当前 method：`ping`、`status`、`poweroff`、`reboot`。
+当前 method：`ping`、`status`、`poweroff`、`reboot`、`session_status`、`session_start`、`session_stop`、
+`service_list`、`service_status`、`service_start`、`service_stop`、`service_restart`、`logs`。
+
+其中 `service_*` 与 `session_*` 属于写操作，开发模式（`ONEO_DEV=1`）下会被拒绝；
+`service_list`、`service_status`、`logs` 是只读操作，开发模式下直接作用于宿主机 systemd/journal，便于调试。
 
 ## 运行方式
 
@@ -65,7 +69,9 @@ scripts/dev.sh         本机开发脚本（不启动虚拟机）
 - 本机开发：`make dev`，`ONEO_SOCKET=/tmp/oneos-dev.sock` + `ONEO_DEV=1`
   （开发模式会禁用 poweroff/reboot，避免把宿主机电源关掉）
 
-## GUI 预留
+## 图形会话
 
-v0.0.2 将新增 `oneos-session`：由 logind 管理会话，拉起 Wayland 合成器与首个窗口应用，
-`oneosd` 增加 session API。当前分层已经为此留出位置，无需改动基础镜像结构。
+`oneos-session.service` 是图形会话单元，由 `oneos session start` 启动，运行
+`cage`（Wayland kiosk 合成器）+ `foot`（终端）。运行在无 logind 会话的环境下，
+因此用 `LIBSEAT_BACKEND=builtin` 直接访问 DRM/evdev，用 `WLR_RENDERER=pixman`
+做纯软件渲染（QEMU 的 virtio-vga 没有 3D）。后续替换为自研合成器（smithay）。
