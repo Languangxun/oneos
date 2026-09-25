@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <keyboard>
+    <keybind key="A-Tab">
+      <action name="NextWindow"/>
+    </keybind>
+    <keybind key="A-S-Tab">
+      <action name="PreviousWindow"/>
+    </keybind>
+    <keybind key="W-Return">
+      <action name="Execute" command="foot"/>
+    </keybind>
+    <keybind key="W-d">
+      <action name="Execute" command="fuzzel"/>
+    </keybind>
+    <keybind key="W-e">
+      <action name="Execute" command="foot -e sh -c 'oneos settings; read _'"/>
+    </keybind>
+    <keybind key="W-q">
+      <action name="Close"/>
+    </keybind>
+    <keybind key="A-F4">
+      <action name="Close"/>
+    </keybind>
+    <keybind key="W-S-e">
+      <action name="Exit"/>
+    </keybind>
+  </keyboard>
+  <theme>
+    <cornerRadius>6</cornerRadius>
+  </theme>
+</openbox_config>

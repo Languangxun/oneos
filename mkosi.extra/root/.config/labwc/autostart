@@ -1,0 +1,4 @@
+#!/bin/sh
+
+waybar &
+swaybg -c '#1b1e2b' &

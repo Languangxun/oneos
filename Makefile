@@ -19,10 +19,11 @@ genkey:
 	$(SUDO) $(MKOSI) genkey
 
 build:
-	$(CARGO) build --release --target $(MUSL) -p oneosd -p oneos
+	$(CARGO) build --release --target $(MUSL) -p oneosd -p oneos -p oneos-splash
 	mkdir -p $(BIN_DIR)
 	cp target/$(MUSL)/release/oneosd $(BIN_DIR)/
 	cp target/$(MUSL)/release/oneos $(BIN_DIR)/
+	cp target/$(MUSL)/release/oneos-splash $(BIN_DIR)/
 
 image: build
 	$(SUDO) $(MKOSI) -f

@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<openbox_menu xmlns="http://openbox.org/3.4/menu">
+  <menu id="root-menu" label="OneOS">
+    <item label="终端">
+      <action name="Execute">
+        <command>foot</command>
+      </action>
+    </item>
+    <item label="启动器">
+      <action name="Execute">
+        <command>fuzzel</command>
+      </action>
+    </item>
+    <item label="系统设置">
+      <action name="Execute">
+        <command>foot -e sh -c 'oneos settings; read _'</command>
+      </action>
+    </item>
+    <separator/>
+    <item label="重启">
+      <action name="Execute">
+        <command>systemctl reboot</command>
+      </action>
+    </item>
+    <item label="关机">
+      <action name="Execute">
+        <command>systemctl poweroff</command>
+      </action>
+    </item>
+    <separator/>
+    <item label="退出桌面">
+      <action name="Exit"/>
+    </item>
+  </menu>
+</openbox_menu>

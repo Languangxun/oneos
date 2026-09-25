@@ -8,6 +8,7 @@
 /mkosi.crt
 /mkosi.extra/usr/bin/oneos
 /mkosi.extra/usr/bin/oneosd
+/mkosi.extra/usr/bin/oneos-splash
 *.raw
 *.raw.zst
 *.uki

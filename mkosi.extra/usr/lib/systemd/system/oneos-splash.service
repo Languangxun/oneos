@@ -1,0 +1,13 @@
+[Unit]
+Description=OneOS Boot Animation
+Documentation=https://github.com/Languangxun/oneos
+After=systemd-vconsole-setup.service
+Before=getty.target
+ConditionPathExists=/dev/fb0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/oneos-splash
+
+[Install]
+WantedBy=multi-user.target
