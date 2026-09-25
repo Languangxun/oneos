@@ -1,5 +1,6 @@
 use oneos_proto::{
-    LogsParam, Method, Request, Response, ServiceInfo, SessionState, Status, UnitParam,
+    LogsParam, Method, Request, Response, ServiceInfo, SessionState, SettingsInfo, Status,
+    UnitParam, ValueParam,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -8,6 +9,7 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::os::fd::FromRawFd;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
+use std::path::Path;
 use std::process::Command;
 
 fn main() -> io::Result<()> {
@@ -118,6 +120,9 @@ fn dispatch(request: Request) -> Response {
         Method::ServiceStop => service_action(id, "stop", params),
         Method::ServiceRestart => service_action(id, "restart", params),
         Method::Logs => logs(id, params),
+        Method::SettingsShow => Response::ok(id, settings_show()),
+        Method::SettingsSetHostname => settings_set(id, params, "hostname"),
+        Method::SettingsSetTimezone => settings_set(id, params, "timezone"),
     }
 }
 
@@ -271,6 +276,109 @@ fn logs(id: u64, params: Value) -> Response {
         Ok(output) => Response::error(id, "journalctl_failed", command_error(&output)),
         Err(err) => Response::error(id, "spawn_failed", err.to_string()),
     }
+}
+
+fn settings_show() -> SettingsInfo {
+    SettingsInfo {
+        hostname: read_trimmed("/etc/hostname").unwrap_or_default(),
+        timezone: timezone_name(),
+        locale: locale_name(),
+    }
+}
+
+fn timezone_name() -> String {
+    fs::read_link("/etc/localtime")
+        .ok()
+        .and_then(|path| {
+            path.strip_prefix("/usr/share/zoneinfo")
+                .ok()
+                .map(|path| path.to_string_lossy().trim_start_matches('/').to_string())
+        })
+        .filter(|timezone| !timezone.is_empty())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn locale_name() -> String {
+    fs::read_to_string("/etc/locale.conf")
+        .ok()
+        .and_then(|contents| {
+            contents.lines().find_map(|line| {
+                line.strip_prefix("LANG=")
+                    .map(|value| value.trim().to_string())
+            })
+        })
+        .unwrap_or_else(|| "C".to_string())
+}
+
+fn settings_set(id: u64, params: Value, key: &str) -> Response {
+    if std::env::var_os("ONEO_DEV").is_some() {
+        return Response::error(id, "dev_mode", "settings changes are disabled in dev mode");
+    }
+
+    let param: ValueParam = match serde_json::from_value(params) {
+        Ok(param) => param,
+        Err(err) => return Response::error(id, "bad_params", err.to_string()),
+    };
+
+    let (command, argument) = match key {
+        "hostname" => {
+            if let Err(message) = validate_hostname(&param.value) {
+                return Response::error(id, "bad_params", message);
+            }
+            ("hostnamectl", "set-hostname")
+        }
+        "timezone" => {
+            if let Err(message) = validate_timezone(&param.value) {
+                return Response::error(id, "bad_params", message);
+            }
+            ("timedatectl", "set-timezone")
+        }
+        unknown => {
+            return Response::error(id, "bad_params", format!("unknown setting: {unknown}"));
+        }
+    };
+
+    match run_control(command, &[argument, param.value.as_str()]) {
+        Ok(()) => Response::ok(id, settings_show()),
+        Err(message) => Response::error(id, "settings_failed", message),
+    }
+}
+
+fn run_control(command: &str, args: &[&str]) -> Result<(), String> {
+    match Command::new(command).args(args).output() {
+        Ok(output) if output.status.success() => Ok(()),
+        Ok(output) => Err(command_error(&output)),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+fn validate_hostname(hostname: &str) -> Result<(), String> {
+    if hostname.is_empty() || hostname.len() > 63 {
+        return Err("hostname must be 1 to 63 characters long".to_string());
+    }
+    let valid = hostname
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-');
+    if !valid || hostname.starts_with('-') || hostname.ends_with('-') {
+        return Err(format!("invalid hostname: {hostname}"));
+    }
+    Ok(())
+}
+
+fn validate_timezone(timezone: &str) -> Result<(), String> {
+    if timezone.is_empty()
+        || timezone.starts_with('/')
+        || timezone.contains("..")
+        || timezone
+            .chars()
+            .any(|c| c.is_whitespace() || c == '\\' || c == '\0')
+    {
+        return Err(format!("invalid timezone: {timezone}"));
+    }
+    if !Path::new("/usr/share/zoneinfo").join(timezone).exists() {
+        return Err(format!("unknown timezone: {timezone}"));
+    }
+    Ok(())
 }
 
 #[derive(Debug, Deserialize)]
@@ -444,5 +552,26 @@ mod tests {
         assert_eq!(info.unit, "dbus.service");
         assert_eq!(info.active, "active");
         assert_eq!(info.sub, "running");
+    }
+
+    #[test]
+    fn validate_hostname_rules() {
+        assert!(validate_hostname("oneos").is_ok());
+        assert!(validate_hostname("my-host2").is_ok());
+        assert!(validate_hostname("").is_err());
+        assert!(validate_hostname("-bad").is_err());
+        assert!(validate_hostname("bad-").is_err());
+        assert!(validate_hostname("bad host").is_err());
+        assert!(validate_hostname(&"a".repeat(64)).is_err());
+    }
+
+    #[test]
+    fn validate_timezone_rules() {
+        assert!(validate_timezone("UTC").is_ok());
+        assert!(validate_timezone("Asia/Shanghai").is_ok());
+        assert!(validate_timezone("").is_err());
+        assert!(validate_timezone("/etc/passwd").is_err());
+        assert!(validate_timezone("../../etc/passwd").is_err());
+        assert!(validate_timezone("Not/AZone").is_err());
     }
 }

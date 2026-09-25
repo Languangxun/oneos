@@ -22,7 +22,8 @@
 
 - [x] `oneos service`（list / status / start / stop / restart）
 - [x] `oneos logs`（journal 转发）
-- [ ] 系统设置面板
+- [x] `oneos settings`（show / hostname / timezone）
+- [ ] 图形设置面板
 
 ## v0.0.4 应用与差异化
 

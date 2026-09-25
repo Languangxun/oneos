@@ -58,10 +58,11 @@ scripts/dev.sh         本机开发脚本（不启动虚拟机）
 ```
 
 当前 method：`ping`、`status`、`poweroff`、`reboot`、`session_status`、`session_start`、`session_stop`、
-`service_list`、`service_status`、`service_start`、`service_stop`、`service_restart`、`logs`。
+`service_list`、`service_status`、`service_start`、`service_stop`、`service_restart`、`logs`、
+`settings_show`、`settings_set_hostname`、`settings_set_timezone`。
 
-其中 `service_*` 与 `session_*` 属于写操作，开发模式（`ONEO_DEV=1`）下会被拒绝；
-`service_list`、`service_status`、`logs` 是只读操作，开发模式下直接作用于宿主机 systemd/journal，便于调试。
+其中写操作（`service_*`、`session_*`、`settings_set_*`）在开发模式（`ONEO_DEV=1`）下会被拒绝；
+`service_list`、`service_status`、`logs`、`settings_show` 是只读操作，开发模式下直接作用于宿主机，便于调试。
 
 ## 运行方式
 

@@ -42,6 +42,9 @@ oneos service list                    # 列出服务
 oneos service status sshd.service     # 查看服务状态
 oneos service start|stop|restart sshd.service
 oneos logs -u oneos-session.service -n 50
+oneos settings                        # 查看主机名/时区/locale
+oneos settings hostname my-oneos
+oneos settings timezone Asia/Shanghai
 ```
 
 ## 日常开发

@@ -23,6 +23,9 @@ pub enum Method {
     ServiceStop,
     ServiceRestart,
     Logs,
+    SettingsShow,
+    SettingsSetHostname,
+    SettingsSetTimezone,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,6 +97,18 @@ pub struct LogsParam {
     pub unit: Option<String>,
     #[serde(default)]
     pub lines: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SettingsInfo {
+    pub hostname: String,
+    pub timezone: String,
+    pub locale: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValueParam {
+    pub value: String,
 }
 
 impl Response {

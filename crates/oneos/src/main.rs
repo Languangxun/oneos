@@ -1,4 +1,6 @@
-use oneos_proto::{Method, Request, Response, ServiceInfo, SessionState, Status, call, connect};
+use oneos_proto::{
+    Method, Request, Response, ServiceInfo, SessionState, SettingsInfo, Status, call, connect,
+};
 use serde_json::{Value, json};
 
 fn main() {
@@ -11,6 +13,7 @@ fn main() {
         "session" => session(args.get(1).map(String::as_str).unwrap_or("status")),
         "service" => service(&args),
         "logs" => logs(&args),
+        "settings" => settings(&args),
         "poweroff" => action(Method::Poweroff),
         "reboot" => action(Method::Reboot),
         "version" => {
@@ -38,6 +41,7 @@ fn usage() {
     println!("       oneos session <status|start|stop>");
     println!("       oneos service <list|status|start|stop|restart> [unit]");
     println!("       oneos logs [-u unit] [-n lines]");
+    println!("       oneos settings [show|hostname <name>|timezone <zone>]");
 }
 
 fn status() -> Result<(), i32> {
@@ -159,6 +163,39 @@ fn logs(args: &[String]) -> Result<(), i32> {
 
 fn action(method: Method) -> Result<(), i32> {
     request(method)?;
+    Ok(())
+}
+
+fn settings(args: &[String]) -> Result<(), i32> {
+    let subcommand = args.get(1).map(String::as_str).unwrap_or("show");
+
+    let method = match subcommand {
+        "show" => Method::SettingsShow,
+        "hostname" => Method::SettingsSetHostname,
+        "timezone" => Method::SettingsSetTimezone,
+        unknown => {
+            eprintln!("oneos: unknown settings command: {unknown}");
+            return Err(2);
+        }
+    };
+
+    let response = if method == Method::SettingsShow {
+        request(method)?
+    } else {
+        let Some(value) = args.get(2) else {
+            eprintln!("oneos: value required");
+            return Err(2);
+        };
+        request_params(method, json!({ "value": value }))?
+    };
+
+    if let Some(value) = response.result
+        && let Ok(info) = serde_json::from_value::<SettingsInfo>(value)
+    {
+        println!("Hostname     {}", info.hostname);
+        println!("Timezone     {}", info.timezone);
+        println!("Locale       {}", info.locale);
+    }
     Ok(())
 }
 

@@ -3,14 +3,14 @@ resolver = "3"
 members = ["crates/oneos", "crates/oneos-proto", "crates/oneosd"]
 
 [workspace.package]
-version = "0.0.3"
+version = "0.0.4"
 edition = "2024"
 license = "MIT"
 publish = false
 repository = "https://github.com/Languangxun/oneos"
 
 [workspace.dependencies]
-oneos-proto = { path = "crates/oneos-proto", version = "0.0.3" }
+oneos-proto = { path = "crates/oneos-proto", version = "0.0.4" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
