@@ -60,6 +60,39 @@ cargo build -p oneos-splash
 `ConditionPathExists=/dev/fb0`（纯串口模式自动跳过）。内核命令行加了
 `quiet` 和 `vt.global_cursor_default=0`。
 
+## 启动耗时自适应
+
+动画会挡住登录提示，装完整版（约 3.9s）比系统本身启动还慢。播放器因此改成
+"按上次启动耗时自动加速"：
+
+```
+每次启动                         下次启动
+oneos-splash --record   ──►  /var/lib/oneos/boot-history
+（multi-user.target 之后运行）    │  保留最近 8 条，取最近 5 条均值 mean
+                                  ▼
+                     剩余预算 = mean - 当前 uptime
+                     播放时长 = clamp(剩余预算 × 0.8, 0.9s, 3.9s)
+```
+
+- 记录单元 `oneos-boot-record.service` 是 `WantedBy=multi-user.target` +
+  `After=multi-user.target`：systemd 会在 multi-user 达成后启动它，所以记录的是
+  "内核启动 → 系统就绪"的总时间，且不会反过来阻塞启动；
+  `/run/oneos-boot-recorded` 保证每次开机只记一条
+- 播放器在动画开始前（填充掩码算完之后）读 `/proc/uptime` 作为 `now`，
+  即当前已经启动到哪一步；预估剩余时间再打 8 折，速度只快不慢
+- 结果：启动快的机器动画几秒内放完，慢的机器保持完整时长；
+  下限 0.9s（约 4.3 倍速），上限是自然时长 3.9s
+- 第一次启动没有历史数据，用 2.0s 的保守默认值
+
+改这些常量在 `crates/oneos-splash/src/main.rs` 顶部：
+`FIRST_BOOT_SECS`（首启时长）、`MIN_SECS`（最快）、`SPEED_MARGIN`（折扣）、
+`HISTORY_WINDOW`（用几次均值）。手动记录一次当前 uptime 可调试：
+
+```sh
+oneos-splash --record        # 追加一条到 /var/lib/oneos/boot-history
+cat /var/lib/oneos/boot-history
+```
+
 ## 本地预览
 
 不用进虚拟机：

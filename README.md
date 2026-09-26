@@ -29,7 +29,7 @@ oneos session start
 |---|---|
 | `Super+Enter` | 打开终端（foot） |
 | `Super+D` | 打开启动器（fuzzel） |
-| `Super+E` | 系统设置（终端中执行 `oneos settings`） |
+| `Super+E` | 系统设置面板（`oneos-settings`） |
 | `Super+Q` | 关闭当前窗口 |
 | `Super+Shift+E` | 退出桌面 |
 
@@ -46,6 +46,8 @@ oneos service status|start|stop|restart <unit>
 oneos logs [-u unit] [-n lines]       # 日志（journal）
 oneos settings [show|hostname <name>|timezone <zone>]
 oneos poweroff | reboot
+
+oneos-settings                        # 设置面板（whiptail 对话框）
 ```
 
 没有显示环境时用串口控制台启动：`make run-serial`。
@@ -102,6 +104,7 @@ OVMF 固件 → ESP 上的 systemd-boot → EFI/Linux/oneos-*.efi（UKI）
    → sysinit → basic → multi-user → graphical target
    → oneosd.socket 开始监听 /run/oneos/oneosd.sock
    → oneos-splash 在 getty 前播放连笔 OneOS 开机动画（写 /dev/fb0）
+   → oneos-boot-record 在 multi-user.target 之后记录本次启动耗时，供下次预估
    → getty 自动登录 root（tty1 / tty0 / hvc0）
 ```
 
@@ -121,7 +124,7 @@ fd 3，直接在上面 accept；本机开发时没有 systemd，就自己 bind�
 
 ```json
 // 成功
-{"id":1,"ok":true,"result":{"version":"0.0.5","hostname":"oneos", "...":"..."}}
+{"id":1,"ok":true,"result":{"version":"0.0.6","hostname":"oneos", "...":"..."}}
 // 失败
 {"id":2,"ok":false,"error":{"code":"unit_not_found","message":"nope.service: unit not found"}}
 ```
@@ -174,6 +177,11 @@ Wayland 模型：
    每帧按"已写弧长"把轮廓画成粗笔画得到墨迹掩码，两者相乘再写到 `/dev/fb0`
 3. 每字母 0.5s 顺序书写，缓动 `cubic-bezier(0.4,0,0.2,1)`，下方配细进度条
 4. `oneos-splash.service` 在 `getty.target` 之前运行，放完动画才出现登录提示
+5. **动画时长自适应**：`oneos-boot-record.service` 每次启动把"到
+   multi-user.target 的耗时"追加进 `/var/lib/oneos/boot-history`（保留最近 8 次）。下次启动时
+   `oneos-splash` 取最近几次的均值，减去当前 uptime 再乘 0.8（留余量），
+   得到本次可用的播放时长；系统启动越快，动画播放越快（最快 0.9s），
+   保证每次都在登录提示出现前刚好放完，不再拖慢启动
 
 完整原理、参数调整、本地预览方法见 [docs/BOOT-ANIMATION.md](docs/BOOT-ANIMATION.md)。
 
@@ -185,6 +193,9 @@ Wayland 模型：
 - `oneos settings`：读取 `/etc/hostname`、`/etc/localtime` 链接、`/etc/locale.conf`；
   修改时先做严格校验（主机名 RFC 风格、时区必须存在于 `/usr/share/zoneinfo`），
   再调用 `hostnamectl` / `timedatectl`
+- `oneos-settings`：whiptail 对话框面板（系统信息 / 主机名 / 时区 / 服务 / 日志 /
+  电源），通过 `oneos` CLI 走 oneosd API，因此校验规则与命令行完全一致；
+  从桌面按 `Super+E`、右键菜单或 fuzzel 搜索 "OneOS 设置" 都能打开
 
 ### 8. 开发循环
 
@@ -204,17 +215,19 @@ GitHub Actions 会在 push 时自动跑 fmt / clippy / test。
 ## 目录结构
 
 ```
-mkosi.conf              镜像构建配置
-mkosi.extra/            覆盖进镜像根目录（品牌/单元/桌面配置/二进制）
-crates/oneos-proto/     协议定义与客户端库
-crates/oneosd/          守护进程
-crates/oneos/           命令行客户端
-crates/oneos-splash/    开机动画（fbdev，零依赖）
-tools/gen-signature.py  连笔路径生成器（Hershey 字体）
-scripts/dev.sh          本机开发脚本
-docs/ARCHITECTURE.md    架构细节
-docs/BOOT-ANIMATION.md  开机动画原理
-docs/ROADMAP.md         路线图
+mkosi.conf                    镜像构建配置
+mkosi.extra/                  覆盖进镜像根目录（品牌/单元/桌面配置/二进制）
+mkosi.extra/usr/bin/oneos-settings   设置面板（whiptail shell 脚本）
+mkosi.extra/usr/share/applications/  fuzzel 启动器条目
+crates/oneos-proto/           协议定义与客户端库
+crates/oneosd/                守护进程
+crates/oneos/                 命令行客户端
+crates/oneos-splash/          开机动画 + 启动耗时记录（fbdev，零依赖）
+tools/gen-signature.py        连笔路径生成器（Hershey 字体）
+scripts/dev.sh                本机开发脚本
+docs/ARCHITECTURE.md          架构细节
+docs/BOOT-ANIMATION.md        开机动画原理
+docs/ROADMAP.md               路线图
 ```
 
 ## 排错

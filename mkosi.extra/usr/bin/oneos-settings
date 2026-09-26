@@ -1,0 +1,220 @@
+#!/bin/sh
+# OneOS 设置面板：系统信息 / 主机名 / 时区 / 服务 / 日志 / 电源
+# 通过 oneos CLI 走 oneosd 的 JSON API，校验逻辑与命令行一致。
+set -u
+
+export LC_ALL=C.UTF-8
+
+ONEO="${ONEO:-oneos}"
+TITLE="OneOS 设置"
+
+WORKDIR="$(mktemp -d)" || exit 1
+cleanup() {
+    rm -rf "$WORKDIR"
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
+show_message() {
+    whiptail --title "$TITLE" --msgbox "$1" 14 72
+}
+
+run_oneos() {
+    OUTPUT=$("$ONEO" "$@" 2>&1)
+}
+
+show_info() {
+    file="$WORKDIR/info.txt"
+    {
+        "$ONEO" status 2>&1
+        echo
+        "$ONEO" settings 2>&1
+        echo
+        printf 'Kernel       %s\n' "$(uname -srm)"
+    } >"$file"
+    whiptail --title "系统信息" --scrolltext --textbox "$file" 20 74
+}
+
+change_hostname() {
+    current=$("$ONEO" settings 2>/dev/null | awk '$1 == "Hostname" { print $2; exit }')
+    new=$(whiptail --title "修改主机名" --inputbox \
+        "新主机名（1-63 个字母、数字或连字符）：" 10 64 "${current:-oneos}" \
+        3>&1 1>&2 2>&3) || return 0
+    [ -n "$new" ] || return 0
+    [ "$new" = "$current" ] && return 0
+    if run_oneos settings hostname "$new"; then
+        whiptail --title "修改主机名" --msgbox "主机名已更新为 $new" 10 60
+    else
+        whiptail --title "修改主机名" --msgbox "修改失败：\n\n$OUTPUT" 14 72
+    fi
+}
+
+choose_region() {
+    zones=$1
+    set -- UTC "协调世界时（UTC）"
+    for region in $(printf '%s\n' "$zones" | cut -d/ -f1 | sort -u); do
+        [ "$region" = "UTC" ] && continue
+        set -- "$@" "$region" "地区：$region"
+    done
+    whiptail --title "修改时区" --menu "选择地区" 20 64 12 "$@" 3>&1 1>&2 2>&3
+}
+
+choose_zone() {
+    zones=$1
+    region=$2
+    set --
+    for zone in $(printf '%s\n' "$zones" | grep "^$region/" | sort); do
+        set -- "$@" "$zone" "$zone"
+    done
+    whiptail --title "修改时区" --menu "选择城市/时区" 22 72 14 "$@" 3>&1 1>&2 2>&3
+}
+
+change_timezone() {
+    zones=$(timedatectl list-timezones 2>/dev/null) || zones=""
+    if [ -z "$zones" ]; then
+        show_message "无法获取时区列表（timedatectl 不可用）"
+        return 0
+    fi
+
+    region=$(choose_region "$zones") || return 0
+    if [ "$region" = "UTC" ]; then
+        zone=UTC
+    else
+        zone=$(choose_zone "$zones" "$region") || return 0
+    fi
+    [ -n "$zone" ] || return 0
+
+    if run_oneos settings timezone "$zone"; then
+        whiptail --title "修改时区" --msgbox "时区已更新为 $zone" 10 60
+    else
+        whiptail --title "修改时区" --msgbox "修改失败：\n\n$OUTPUT" 14 72
+    fi
+}
+
+service_menu() {
+    unit=$1
+    action=$(whiptail --title "服务：$unit" --menu "选择操作" 16 64 7 \
+        status "查看状态" \
+        logs "查看日志" \
+        start "启动" \
+        stop "停止" \
+        restart "重启" \
+        3>&1 1>&2 2>&3) || return 0
+
+    case "$action" in
+        status)
+            if run_oneos service status "$unit"; then
+                whiptail --title "服务：$unit" --msgbox "$OUTPUT" 16 76
+            else
+                whiptail --title "服务：$unit" --msgbox "查询失败：\n\n$OUTPUT" 14 72
+            fi
+            ;;
+        logs)
+            show_logs "$unit"
+            ;;
+        start|stop|restart)
+            case "$action" in
+                start) verb=启动 ;;
+                stop) verb=停止 ;;
+                *) verb=重启 ;;
+            esac
+            if run_oneos service "$action" "$unit"; then
+                whiptail --title "服务：$unit" --msgbox "${verb}成功：\n\n$OUTPUT" 14 72
+            else
+                whiptail --title "服务：$unit" --msgbox "${verb}失败：\n\n$OUTPUT" 14 72
+            fi
+            ;;
+    esac
+}
+
+manage_services() {
+    file="$WORKDIR/services.txt"
+    if ! "$ONEO" service list >"$file" 2>&1 || [ ! -s "$file" ]; then
+        show_message "无法获取服务列表，请确认 oneosd 正在运行：\n\n$(cat "$file" 2>/dev/null)"
+        return 0
+    fi
+
+    set --
+    while read -r unit active sub description; do
+        [ -n "$unit" ] || continue
+        set -- "$@" "$unit" "$active/$sub  $description"
+    done <"$file"
+
+    if [ "$#" -eq 0 ]; then
+        show_message "没有可管理的服务"
+        return 0
+    fi
+
+    unit=$(whiptail --title "服务管理" --menu "当前单元（状态/子状态）：" 22 74 15 \
+        "$@" 3>&1 1>&2 2>&3) || return 0
+    service_menu "$unit"
+}
+
+show_logs() {
+    unit=${1:-}
+    file="$WORKDIR/logs.txt"
+    if [ -n "$unit" ]; then
+        "$ONEO" logs -u "$unit" -n 200 >"$file" 2>&1
+        title="日志：$unit"
+    else
+        "$ONEO" logs -n 200 >"$file" 2>&1
+        title="系统日志"
+    fi
+    whiptail --title "$title" --scrolltext --textbox "$file" 22 76
+}
+
+power_menu() {
+    action=$(whiptail --title "电源" --menu "选择操作" 12 56 2 \
+        reboot "重启系统" \
+        poweroff "关闭系统" \
+        3>&1 1>&2 2>&3) || return 0
+
+    case "$action" in
+        reboot) question="确定要重启系统吗？" ;;
+        poweroff) question="确定要关机吗？" ;;
+        *) return 0 ;;
+    esac
+
+    whiptail --title "电源" --yesno "$question" 10 56 || return 0
+    if ! run_oneos "$action"; then
+        whiptail --title "电源" --msgbox "操作失败：\n\n$OUTPUT" 12 64
+    fi
+}
+
+while :; do
+    choice=$(whiptail --title "$TITLE" --cancel-button "退出" \
+        --menu "选择要配置的项目" 20 64 7 \
+        info "系统信息" \
+        hostname "修改主机名" \
+        timezone "修改时区" \
+        services "服务管理" \
+        logs "查看日志" \
+        power "电源" \
+        3>&1 1>&2 2>&3) || break
+
+    case "$choice" in
+        info)
+            show_info
+            ;;
+        hostname)
+            change_hostname
+            ;;
+        timezone)
+            change_timezone
+            ;;
+        services)
+            manage_services
+            ;;
+        logs)
+            unit=$(whiptail --title "查看日志" --inputbox \
+                "服务单元名（留空查看全部）：" 10 64 "" 3>&1 1>&2 2>&3) || continue
+            show_logs "$unit"
+            ;;
+        power)
+            power_menu
+            ;;
+        *)
+            break
+            ;;
+    esac
+done

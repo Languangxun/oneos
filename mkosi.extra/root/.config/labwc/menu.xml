@@ -13,7 +13,7 @@
     </item>
     <item label="系统设置">
       <action name="Execute">
-        <command>foot -e sh -c 'oneos settings; read _'</command>
+        <command>foot -e oneos-settings</command>
       </action>
     </item>
     <separator/>

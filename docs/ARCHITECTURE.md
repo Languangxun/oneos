@@ -20,13 +20,15 @@
 mkosi.conf                     镜像构建配置（发行版/包/引导/运行时）
 mkosi.extra/                   原样覆盖到镜像根目录
   etc/                         品牌、网络、resolv.conf、systemd 启用软链
-  usr/lib/systemd/system/      oneosd.socket / oneosd.service / oneos-session.service
-  usr/bin/                     make build 放入静态编译的 oneosd / oneos / oneos-splash
+  usr/lib/systemd/system/      oneosd / oneos-session / oneos-splash / oneos-boot-record 单元
+  usr/bin/                     make build 放入静态编译的 oneosd / oneos / oneos-splash，
+                               以及 shell 脚本 oneos-settings（设置面板）
+  usr/share/applications/      fuzzel 启动器条目（OneOS 设置）
   root/.config/                桌面配置（labwc / waybar / fuzzel / foot）
 crates/oneos-proto/            协议定义与客户端库
 crates/oneosd/                 守护进程（socket 激活）
 crates/oneos/                  命令行客户端
-crates/oneos-splash/           开机动画（fbdev，零依赖）
+crates/oneos-splash/           开机动画与启动耗时记录（fbdev，零依赖）
 tools/gen-signature.py         用 fontTools + Caveat 生成字形轮廓数据
 tools/fonts/Caveat.ttf         手写字体（OFL，含许可证）
 scripts/dev.sh                 本机开发脚本（不启动虚拟机）
@@ -55,7 +57,7 @@ docs/                          架构、路线图、开机动画原理
 成功响应：
 
 ```json
-{"id":1,"ok":true,"result":{"version":"0.0.5","os":"OneOS 0.0.5","hostname":"oneos","uptime_secs":42,"boot_id":"..."}}
+{"id":1,"ok":true,"result":{"version":"0.0.6","os":"OneOS 0.0.6","hostname":"oneos","uptime_secs":42,"boot_id":"..."}}
 ```
 
 失败响应：
@@ -108,4 +110,17 @@ docs/                          架构、路线图、开机动画原理
 `oneos-splash` 在 getty 之前把 "OneOS" 写到 `/dev/fb0`：字形是 Caveat（OFL）的
 真实填充轮廓（`tools/gen-signature.py` 离线生成），播放时用粗墨迹沿轮廓显影，
 仿 Apple Hello / InkTrail 的效果。播放器零依赖、支持 16/32bpp framebuffer。
+
+`oneos-boot-record.service` 排在 `multi-user.target` 之后运行
+`oneos-splash --record`，把"到启动完成的耗时"写进
+`/var/lib/oneos/boot-history`；下次启动时播放器取历史均值预估剩余时间，
+按比例加速动画（0.9s ~ 3.9s），保证动画在登录提示前放完、又不拖慢启动。
 详见 [BOOT-ANIMATION.md](BOOT-ANIMATION.md)。
+
+## 设置面板
+
+`oneos-settings` 是 whiptail 写的对话框面板（`mkosi.extra/usr/bin/`），
+负责系统信息、主机名、时区、服务、日志、电源六类操作。它不直接改系统，
+而是调用 `oneos` CLI（进而走 oneosd 的 JSON API），所以参数校验、dev 模式
+保护等行为与命令行完全一致。桌面入口：`Super+E`、labwc 右键菜单、
+fuzzel 里的 "OneOS 设置"。

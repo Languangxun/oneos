@@ -5,4 +5,5 @@
 | |_| | | | |  __/ |_| |___) |
  \___/|_| |_|\___|\___/|____/
 
- OneOS 0.0.5 — 输入 'oneos status' 查看系统状态；'oneos session start' 启动图形会话
+ OneOS 0.0.6 — 输入 'oneos status' 查看状态；'oneos session start' 启动桌面；
+ 图形会话里按 Super+E 或运行 'oneos-settings' 打开设置面板

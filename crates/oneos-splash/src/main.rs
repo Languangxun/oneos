@@ -1,6 +1,7 @@
 use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::os::unix::fs::FileExt;
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 const SIGNATURE: &str = include_str!("signature.data");
@@ -10,6 +11,14 @@ const START_DELAY: f32 = 0.15;
 const LETTER_SECS: f32 = 0.5;
 const LETTER_DELAY: f32 = 0.06;
 const HOLD_SECS: f32 = 1.0;
+
+const BOOT_HISTORY: &str = "/var/lib/oneos/boot-history";
+const RECORD_STAMP: &str = "/run/oneos-boot-recorded";
+const HISTORY_LIMIT: usize = 8;
+const HISTORY_WINDOW: usize = 5;
+const FIRST_BOOT_SECS: f32 = 2.0;
+const MIN_SECS: f32 = 0.9;
+const SPEED_MARGIN: f32 = 0.8;
 
 const STROKE_WIDTH_RATIO: f32 = 0.13;
 const SOFTNESS: f32 = 0.5;
@@ -236,6 +245,74 @@ fn total_seconds(glyph_count: usize) -> f32 {
         return START_DELAY;
     }
     START_DELAY + glyph_count as f32 * (LETTER_SECS + LETTER_DELAY) - LETTER_DELAY
+}
+
+fn uptime_secs() -> Option<f32> {
+    let text = fs::read_to_string("/proc/uptime").ok()?;
+    text.split_whitespace().next()?.parse().ok()
+}
+
+fn parse_history(text: &str) -> Vec<f32> {
+    text.lines()
+        .filter_map(|line| line.trim().parse::<f32>().ok())
+        .filter(|value| value.is_finite() && *value > 0.1 && *value < 86_400.0)
+        .collect()
+}
+
+fn read_history(path: &str) -> Vec<f32> {
+    fs::read_to_string(path)
+        .map(|text| parse_history(&text))
+        .unwrap_or_default()
+}
+
+fn push_history(history: &mut Vec<f32>, value: f32) {
+    history.push(value);
+    let overflow = history.len().saturating_sub(HISTORY_LIMIT);
+    history.drain(..overflow);
+}
+
+fn target_duration(history: &[f32], now: f32, natural: f32) -> f32 {
+    let recent = &history[history.len().saturating_sub(HISTORY_WINDOW)..];
+    if recent.is_empty() {
+        return natural.min(FIRST_BOOT_SECS);
+    }
+    let mean = recent.iter().sum::<f32>() / recent.len() as f32;
+    ((mean - now) * SPEED_MARGIN).clamp(MIN_SECS, natural)
+}
+
+fn boot_history_path() -> String {
+    std::env::var("ONEO_SPLASH_HISTORY").unwrap_or_else(|_| BOOT_HISTORY.to_string())
+}
+
+fn record_stamp_path() -> String {
+    std::env::var("ONEO_SPLASH_STAMP").unwrap_or_else(|_| RECORD_STAMP.to_string())
+}
+
+fn record_boot() -> io::Result<()> {
+    let history_path = boot_history_path();
+    let stamp_path = record_stamp_path();
+    if Path::new(&stamp_path).exists() {
+        return Ok(());
+    }
+
+    let now = uptime_secs().ok_or_else(|| io::Error::other("cannot read /proc/uptime"))?;
+    let mut history = read_history(&history_path);
+    push_history(&mut history, now);
+
+    if let Some(parent) = Path::new(&history_path).parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut text = String::new();
+    for value in &history {
+        text.push_str(&format!("{value:.3}\n"));
+    }
+    fs::write(&history_path, text)?;
+    if let Some(parent) = Path::new(&stamp_path).parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&stamp_path, format!("{now:.3}\n"))?;
+    eprintln!("oneos-splash: recorded boot time {now:.2}s");
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -517,6 +594,9 @@ fn main() -> io::Result<()> {
             .unwrap_or("/tmp/oneos-splash");
         return preview(dir);
     }
+    if args.iter().any(|arg| arg == "--record") {
+        return record_boot();
+    }
 
     let mut framebuffer = Framebuffer::open("/dev/fb0")?;
     let mut signature = parse_signature(SIGNATURE);
@@ -530,19 +610,33 @@ fn main() -> io::Result<()> {
     let mut ink = vec![0u8; framebuffer.width * framebuffer.height];
     let mut canvas = Canvas::new(framebuffer.width, framebuffer.height);
 
-    let duration = total_seconds(signature.glyphs.len()) + HOLD_SECS;
+    let natural = total_seconds(signature.glyphs.len()) + HOLD_SECS;
+    let now = uptime_secs().unwrap_or(0.0);
+    let history = read_history(&boot_history_path());
+    let duration = target_duration(&history, now, natural);
+    let speed = natural / duration;
+    eprintln!(
+        "oneos-splash: {:.2}s natural -> {:.2}s playback (x{speed:.1}), {} boot sample(s)",
+        natural,
+        duration,
+        history.len()
+    );
+
     let frame_time = Duration::from_secs_f64(1.0 / FPS as f64);
     let start = Instant::now();
 
     loop {
-        let elapsed = start.elapsed().as_secs_f32();
+        let wall = start.elapsed().as_secs_f32();
+        let elapsed = (wall * speed).min(natural);
         render(&mut canvas, &signature, &fill, &mut ink, elapsed);
         framebuffer.present(&canvas)?;
-        if elapsed > duration {
+        if wall >= duration {
             break;
         }
         std::thread::sleep(frame_time);
     }
+    render(&mut canvas, &signature, &fill, &mut ink, natural);
+    framebuffer.present(&canvas)?;
 
     Ok(())
 }
@@ -577,6 +671,44 @@ mod tests {
         layout(&mut signature, 800, 450);
         let fill = rasterize_fill(&signature.glyphs, 800, 450, SUPERSAMPLE);
         assert!(fill.iter().any(|value| *value > 200));
+    }
+
+    #[test]
+    fn history_parsing_ignores_junk() {
+        let history = parse_history("2.5\njunk\n-1\n0\n3.25\n999999\n");
+        assert_eq!(history, vec![2.5, 3.25]);
+    }
+
+    #[test]
+    fn history_keeps_only_recent_samples() {
+        let mut history = Vec::new();
+        for value in 1..=20 {
+            push_history(&mut history, value as f32);
+        }
+        assert_eq!(history.len(), HISTORY_LIMIT);
+        assert_eq!(history.first(), Some(&13.0));
+        assert_eq!(history.last(), Some(&20.0));
+    }
+
+    #[test]
+    fn first_boot_uses_fixed_default() {
+        let natural = 3.9;
+        assert!((target_duration(&[], 0.5, natural) - FIRST_BOOT_SECS).abs() < 1e-6);
+    }
+
+    #[test]
+    fn target_duration_follows_boot_estimate() {
+        let natural = 3.9;
+        let history = [3.0, 3.2, 2.8];
+        let now = 0.5;
+        let expected = ((3.0 + 3.2 + 2.8) / 3.0 - now) * SPEED_MARGIN;
+        assert!((target_duration(&history, now, natural) - expected).abs() < 1e-6);
+    }
+
+    #[test]
+    fn target_duration_is_clamped() {
+        assert_eq!(target_duration(&[0.4], 0.5, 3.9), MIN_SECS);
+        assert_eq!(target_duration(&[30.0], 0.5, 3.9), 3.9);
     }
 
     #[test]

@@ -27,14 +27,19 @@
 
 - [x] GitHub Actions：fmt / clippy / test
 
-## v0.0.5 桌面环境（当前）
+## v0.0.5 桌面环境（已完成）
 
 - [x] labwc 合成器（窗口管理、标题栏、快捷键）
 - [x] waybar 状态栏（workspaces / 时钟 / 网络 / CPU / 内存）
 - [x] fuzzel 启动器、swaybg 壁纸、foot 主题
 - [x] OneOS 深色主题与键位（labwc menu.xml + themerc）
 - [x] Apple Hello 风开机动画（Caveat 填充字形 + 墨迹遮罩，仿 InkTrail）
-- [ ] 图形设置面板
+
+## v0.0.6 自适应动画与设置面板（当前）
+
+- [x] 开机动画按历史启动耗时自适应加速（预估每次启动时间，动画在登录提示前放完）
+- [x] `oneos-boot-record.service` 把每次启动耗时记到 `/var/lib/oneos/boot-history`
+- [x] 设置面板 `oneos-settings`（whiptail：系统信息 / 主机名 / 时区 / 服务 / 日志 / 电源）
 - [ ] 自研合成器（以 smithay 起步，替代 labwc）
 - [ ] 输入法（需要合成器实现 input-method 协议）
 

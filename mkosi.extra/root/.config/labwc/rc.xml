@@ -14,7 +14,7 @@
       <action name="Execute" command="fuzzel"/>
     </keybind>
     <keybind key="W-e">
-      <action name="Execute" command="foot -e sh -c 'oneos settings; read _'"/>
+      <action name="Execute" command="foot -e oneos-settings"/>
     </keybind>
     <keybind key="W-q">
       <action name="Close"/>

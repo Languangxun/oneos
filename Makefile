@@ -57,4 +57,5 @@ test:
 
 clean:
 	$(CARGO) clean
-	rm -rf $(BIN_DIR) mkosi.output
+	rm -f $(BIN_DIR)/oneos $(BIN_DIR)/oneosd $(BIN_DIR)/oneos-splash
+	rm -rf mkosi.output
