@@ -20,15 +20,18 @@
 mkosi.conf                     镜像构建配置（发行版/包/引导/运行时）
 mkosi.extra/                   原样覆盖到镜像根目录
   etc/                         品牌、网络、resolv.conf、systemd 启用软链
-  usr/lib/systemd/system/      oneosd / oneos-session / oneos-splash / oneos-boot-record 单元
+  usr/lib/systemd/system/      oneosd / oneos-session / oneos-splash 单元
   usr/bin/                     make build 放入静态编译的 oneosd / oneos / oneos-splash，
-                               以及 shell 脚本 oneos-settings（设置面板）
+                               以及 shell 脚本 oneos-settings（设置面板）、oneos-power（电源菜单）
   usr/share/applications/      fuzzel 启动器条目（OneOS 设置）
+  usr/share/backgrounds/       极光壁纸 oneos-aurora.jpg
   root/.config/                桌面配置（labwc / waybar / fuzzel / foot）
+    waybar/config style.css    顶部状态栏（品牌/工作区/时钟/网络/CPU/内存/磁盘）
+    waybar/dock.json dock.css  底部 dock（启动器/终端/设置/wlr 任务列表/电源）
 crates/oneos-proto/            协议定义与客户端库
 crates/oneosd/                 守护进程（socket 激活）
 crates/oneos/                  命令行客户端
-crates/oneos-splash/           开机动画与启动耗时记录（fbdev，零依赖）
+crates/oneos-splash/           开机动画（fbdev，零依赖，完整播放不可跳过）
 tools/gen-signature.py         用 fontTools + Caveat 生成字形轮廓数据
 tools/fonts/Caveat.ttf         手写字体（OFL，含许可证）
 scripts/dev.sh                 本机开发脚本（不启动虚拟机）
@@ -57,7 +60,7 @@ docs/                          架构、路线图、开机动画原理
 成功响应：
 
 ```json
-{"id":1,"ok":true,"result":{"version":"0.0.6","os":"OneOS 0.0.6","hostname":"oneos","uptime_secs":42,"boot_id":"..."}}
+{"id":1,"ok":true,"result":{"version":"0.0.7","os":"OneOS 0.0.7","hostname":"oneos","uptime_secs":42,"boot_id":"..."}}
 ```
 
 失败响应：
@@ -84,11 +87,17 @@ docs/                          架构、路线图、开机动画原理
 `oneos-session.service` 由 `oneos session start` 启动，运行 `labwc`：
 
 - **labwc**：wlroots 合成器 + 堆叠式窗口管理（标题栏、快捷键、工作区）
-- **waybar / swaybg / fuzzel / foot**：状态栏、壁纸、启动器、终端，由 labwc 的 autostart 拉起
+- **waybar ×2**：autostart 里拉起两个实例——顶栏状态栏（工作区/时钟/网络/CPU/
+  内存/磁盘）和底部 dock（启动器/终端/设置 + `wlr/taskbar` 窗口列表 + 电源按钮）
+- **swaybg / fuzzel / foot**：壁纸、启动器、终端
+- **oneos-power**：dock 电源按钮/`Super+X`/右键菜单共用的重启、关机菜单
 - 配置位于 `/root/.config/{labwc,waybar,fuzzel,foot}`，随 `mkosi.extra/` 进入镜像
 
 无 logind 会话下运行，因此：
 
+- `QemuArgs` 加 `-machine i8042=off`：QEMU 即使 `-nodefaults` 也会创建 PS/2
+  控制器，PS/2 相对鼠标和 `virtio-tablet` 绝对指针同时存在会让光标漂移；
+  关掉 PS/2 只留 tablet，宿主机指针和 guest 一对一
 - `LIBSEAT_BACKEND=builtin`：libseat 直接访问 DRM master 与输入设备
 - `WLR_RENDERER=pixman`：QEMU 的 virtio-vga 没有 3D，用纯软件渲染
 - `Wants/After=systemd-udev-settle.service`：等 udev 枚举完输入设备再启动，
@@ -111,11 +120,10 @@ docs/                          架构、路线图、开机动画原理
 真实填充轮廓（`tools/gen-signature.py` 离线生成），播放时用粗墨迹沿轮廓显影，
 仿 Apple Hello / InkTrail 的效果。播放器零依赖、支持 16/32bpp framebuffer。
 
-`oneos-boot-record.service` 排在 `multi-user.target` 之后运行
-`oneos-splash --record`，把"到启动完成的耗时"写进
-`/var/lib/oneos/boot-history`；下次启动时播放器取历史均值预估剩余时间，
-按比例加速动画（0.9s ~ 3.9s），保证动画在登录提示前放完、又不拖慢启动。
-详见 [BOOT-ANIMATION.md](BOOT-ANIMATION.md)。
+动画强制完整播放（约 3.9s），不可跳过：`oneos-splash.service` 排在
+`getty.target` 与 `systemd-user-sessions.service` 之前，登录提示必须等动画结束；
+`oneos-session.service` 也 `After=oneos-splash.service`，动画播放中启动桌面会被
+systemd 排队，合成器不会抢走画面。详见 [BOOT-ANIMATION.md](BOOT-ANIMATION.md)。
 
 ## 设置面板
 

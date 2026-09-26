@@ -1,0 +1,62 @@
+* {
+  font-family: "FontAwesome", "DejaVu Sans Mono", "Noto Sans CJK SC", monospace;
+  font-size: 14px;
+}
+
+window#waybar {
+  background: rgba(22, 22, 30, 0.94);
+  color: #c0caf5;
+  border-top: 1px solid #7aa2f7;
+}
+
+#custom-launcher,
+#custom-terminal,
+#custom-settings {
+  padding: 0 12px;
+  margin: 5px 2px;
+  border-radius: 6px;
+  background: rgba(122, 162, 247, 0.14);
+  color: #c0caf5;
+}
+
+#custom-launcher:hover,
+#custom-terminal:hover,
+#custom-settings:hover {
+  background: #7aa2f7;
+  color: #1b1e2b;
+}
+
+#custom-power {
+  padding: 0 14px;
+  margin: 5px 4px;
+  border-radius: 6px;
+  background: rgba(247, 118, 142, 0.16);
+  color: #f7768e;
+}
+
+#custom-power:hover {
+  background: #f7768e;
+  color: #1b1e2b;
+}
+
+#taskbar button {
+  padding: 0 10px;
+  margin: 5px 2px;
+  border-radius: 6px;
+  background: transparent;
+  color: #a9b1d6;
+}
+
+#taskbar button:hover {
+  background: rgba(122, 162, 247, 0.25);
+}
+
+#taskbar button.active {
+  background: #7aa2f7;
+  color: #1b1e2b;
+}
+
+#taskbar button.minimized {
+  color: #565f89;
+  font-style: italic;
+}

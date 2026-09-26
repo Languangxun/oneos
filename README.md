@@ -4,7 +4,7 @@
 
 - `oneosd`：会话守护进程，systemd socket 激活 + JSON Lines 协议
 - `oneos`：命令行客户端（状态 / 服务 / 日志 / 设置 / 会话 / 电源）
-- 桌面：Wayland（labwc + waybar + fuzzel + swaybg + foot）
+- 桌面：Wayland（labwc + waybar 顶栏/dock + fuzzel + swaybg + foot）
 - 构建：mkosi 声明式产出可启动 UEFI 磁盘镜像（systemd-boot + UKI）
 
 ## 快速开始
@@ -30,6 +30,7 @@ oneos session start
 | `Super+Enter` | 打开终端（foot） |
 | `Super+D` | 打开启动器（fuzzel） |
 | `Super+E` | 系统设置面板（`oneos-settings`） |
+| `Super+X` | 电源菜单（重启 / 关机） |
 | `Super+Q` | 关闭当前窗口 |
 | `Super+Shift+E` | 退出桌面 |
 
@@ -48,6 +49,7 @@ oneos settings [show|hostname <name>|timezone <zone>]
 oneos poweroff | reboot
 
 oneos-settings                        # 设置面板（whiptail 对话框）
+oneos-power                           # 电源菜单（fuzzel，默认选中「取消」）
 ```
 
 没有显示环境时用串口控制台启动：`make run-serial`。
@@ -103,9 +105,8 @@ OVMF 固件 → ESP 上的 systemd-boot → EFI/Linux/oneos-*.efi（UKI）
    → 内核 + initrd → systemd（PID 1）
    → sysinit → basic → multi-user → graphical target
    → oneosd.socket 开始监听 /run/oneos/oneosd.sock
-   → oneos-splash 在 getty 前播放连笔 OneOS 开机动画（写 /dev/fb0）
-   → oneos-boot-record 在 multi-user.target 之后记录本次启动耗时，供下次预估
-   → getty 自动登录 root（tty1 / tty0 / hvc0）
+   → oneos-splash 播放完整连笔 OneOS 开机动画（约 3.9s，写 /dev/fb0）
+   → 动画放完才放行 systemd-user-sessions，getty 自动登录 root（tty1 / tty0 / hvc0）
 ```
 
 ### 4. oneosd 与通信协议
@@ -124,7 +125,7 @@ fd 3，直接在上面 accept；本机开发时没有 systemd，就自己 bind�
 
 ```json
 // 成功
-{"id":1,"ok":true,"result":{"version":"0.0.6","hostname":"oneos", "...":"..."}}
+{"id":1,"ok":true,"result":{"version":"0.0.7","hostname":"oneos", "...":"..."}}
 // 失败
 {"id":2,"ok":false,"error":{"code":"unit_not_found","message":"nope.service: unit not found"}}
 ```
@@ -145,16 +146,21 @@ Wayland 模型：
 | 组件 | 角色 |
 |---|---|
 | labwc | 合成器 + 堆叠窗口管理（标题栏、快捷键、工作区） |
-| waybar | 顶栏：工作区、时钟、网络、CPU、内存 |
+| waybar | 顶栏状态栏（工作区/时钟/网络/CPU/内存/磁盘）+ 底部 dock（启动器/终端/设置/窗口列表/电源） |
 | fuzzel | 启动器（`Super+D`） |
 | swaybg | 壁纸 |
 | foot | 终端 |
 
-配置放在 `/root/.config/{labwc,waybar,fuzzel,foot}`，随 `mkosi.extra/` 进镜像。
+配置放在 `/root/.config/{labwc,waybar,fuzzel,foot}`，随 `mkosi.extra/` 进镜像；
+壁纸是 `/usr/share/backgrounds/oneos-aurora.jpg`（1920x1080 极光，由 swaybg 铺满），
+状态栏和 dock 的图标用 Font Awesome（`fonts-font-awesome`）。
 
 几个关键点（都是踩坑换来的）：
 
 - QEMU 的 virtio-vga 没有 3D，合成器用 `WLR_RENDERER=pixman` 纯软件渲染
+- 鼠标漂移：QEMU 即使 `-nodefaults` 也会建 PS/2 控制器，相对鼠标和
+  `virtio-tablet` 叠加会导致指针不准；`QemuArgs` 里加 `-machine i8042=off`
+  关掉 PS/2，只留绝对定位的 tablet，指针就和宿主机一对一
 - 没有 logind 会话，`LIBSEAT_BACKEND=builtin` 让 libseat 直接拿 DRM/输入设备
 - 必须等 udev 枚举完输入设备再启动，否则 `libinput: no input devices`，
   合成器会"启动失败但抢走了显示"，表现为画面冻结（所以单元里
@@ -176,12 +182,10 @@ Wayland 模型：
 2. `oneos-splash`（零依赖 Rust）启动时把轮廓超采样填充成一张静态掩码；
    每帧按"已写弧长"把轮廓画成粗笔画得到墨迹掩码，两者相乘再写到 `/dev/fb0`
 3. 每字母 0.5s 顺序书写，缓动 `cubic-bezier(0.4,0,0.2,1)`，下方配细进度条
-4. `oneos-splash.service` 在 `getty.target` 之前运行，放完动画才出现登录提示
-5. **动画时长自适应**：`oneos-boot-record.service` 每次启动把"到
-   multi-user.target 的耗时"追加进 `/var/lib/oneos/boot-history`（保留最近 8 次）。下次启动时
-   `oneos-splash` 取最近几次的均值，减去当前 uptime 再乘 0.8（留余量），
-   得到本次可用的播放时长；系统启动越快，动画播放越快（最快 0.9s），
-   保证每次都在登录提示出现前刚好放完，不再拖慢启动
+4. **强制完整播放**：动画固定播完整时长（约 3.9s），不加速也不跳过。
+   `oneos-splash.service` 排在 `getty.target` 和 `systemd-user-sessions.service`
+   之前，所以动画没放完不会出现登录提示；`oneos-session.service` 也
+   `After=oneos-splash.service`，手动启动桌面同样会被动画挡到放完
 
 完整原理、参数调整、本地预览方法见 [docs/BOOT-ANIMATION.md](docs/BOOT-ANIMATION.md)。
 
@@ -196,6 +200,8 @@ Wayland 模型：
 - `oneos-settings`：whiptail 对话框面板（系统信息 / 主机名 / 时区 / 服务 / 日志 /
   电源），通过 `oneos` CLI 走 oneosd API，因此校验规则与命令行完全一致；
   从桌面按 `Super+E`、右键菜单或 fuzzel 搜索 "OneOS 设置" 都能打开
+- `oneos-power`：fuzzel 电源菜单（默认选中「取消」防误触），重启/关机同样走
+  `oneos` → oneosd；dock 右侧按钮、`Super+X`、labwc 右键菜单都指向它
 
 ### 8. 开发循环
 
@@ -218,11 +224,14 @@ GitHub Actions 会在 push 时自动跑 fmt / clippy / test。
 mkosi.conf                    镜像构建配置
 mkosi.extra/                  覆盖进镜像根目录（品牌/单元/桌面配置/二进制）
 mkosi.extra/usr/bin/oneos-settings   设置面板（whiptail shell 脚本）
+mkosi.extra/usr/bin/oneos-power      电源菜单（fuzzel dmenu 脚本）
 mkosi.extra/usr/share/applications/  fuzzel 启动器条目
+mkosi.extra/usr/share/backgrounds/   壁纸（oneos-aurora.jpg）
+mkosi.extra/root/.config/waybar/     顶栏 config/style.css + dock.json/dock.css
 crates/oneos-proto/           协议定义与客户端库
 crates/oneosd/                守护进程
 crates/oneos/                 命令行客户端
-crates/oneos-splash/          开机动画 + 启动耗时记录（fbdev，零依赖）
+crates/oneos-splash/          开机动画（fbdev，零依赖，完整播放不可跳过）
 tools/gen-signature.py        连笔路径生成器（Hershey 字体）
 scripts/dev.sh                本机开发脚本
 docs/ARCHITECTURE.md          架构细节
@@ -238,6 +247,8 @@ docs/ROADMAP.md               路线图
   串口模式（无 virtio-vga）会按条件跳过，这是预期行为
 - **QEMU 窗口没弹出来**：`make run-serial` 对照；GUI 模式依赖主机 PipeWire，
   Makefile 已传 `PIPEWIRE_RUNTIME_DIR`
+- **鼠标不准 / 点偏**：确认 `mkosi.conf` 的 `QemuArgs` 含 `-machine i8042=off
+  -device virtio-tablet-pci`（只保留绝对指针，别再用 PS/2 相对鼠标）
 - **分辨率**：改 `mkosi.conf` 的 `[Runtime] KernelCommandLineExtra=video=1920x1080`
   （运行时参数，不用重建；要固定进镜像才重建）
 - **构建权限**：Ubuntu AppArmor 限制非特权 userns，mkosi 需要 `sudo`

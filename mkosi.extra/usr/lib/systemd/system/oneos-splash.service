@@ -2,7 +2,7 @@
 Description=OneOS Boot Animation
 Documentation=https://github.com/Languangxun/oneos
 After=systemd-vconsole-setup.service
-Before=getty.target
+Before=getty.target getty@tty1.service console-getty.service serial-getty@hvc0.service systemd-user-sessions.service
 ConditionPathExists=/dev/fb0
 
 [Service]

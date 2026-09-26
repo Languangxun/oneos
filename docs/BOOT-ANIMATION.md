@@ -56,42 +56,23 @@ cargo build -p oneos-splash
 - 5 个字母总时长约 2.9s，末尾停留 1s
 - 进度条按总时长线性填充
 
-开机时序由 `oneos-splash.service` 控制：`Before=getty.target`（挡住登录），
-`ConditionPathExists=/dev/fb0`（纯串口模式自动跳过）。内核命令行加了
-`quiet` 和 `vt.global_cursor_default=0`。
+## 强制完整播放
 
-## 启动耗时自适应
+动画固定按完整时间轴播放（约 3.9s），不加速、不跳过，登录和桌面都必须等它放完：
 
-动画会挡住登录提示，装完整版（约 3.9s）比系统本身启动还慢。播放器因此改成
-"按上次启动耗时自动加速"：
+- `oneos-splash.service` 排在 `getty.target` 和 `systemd-user-sessions.service`
+  之前：后者是 tty 登录提示（`getty@tty1.service`）的前置，所以动画没放完
+  不会出现登录提示，键盘也不会落到 shell 里
+- `oneos-session.service` 加了 `After=oneos-splash.service`：开机时图形会话本来
+  就排在 multi-user 之后；如果你在动画播放中执行 `oneos session start`，
+  systemd 会把启动任务排到动画结束，不会让合成器抢走画面
+- `ConditionPathExists=/dev/fb0`：纯串口模式没有帧缓冲，动画单元直接跳过，
+  不阻塞串口登录
+- 内核命令行加了 `quiet` 和 `vt.global_cursor_default=0`
 
-```
-每次启动                         下次启动
-oneos-splash --record   ──►  /var/lib/oneos/boot-history
-（multi-user.target 之后运行）    │  保留最近 8 条，取最近 5 条均值 mean
-                                  ▼
-                     剩余预算 = mean - 当前 uptime
-                     播放时长 = clamp(剩余预算 × 0.8, 0.9s, 3.9s)
-```
-
-- 记录单元 `oneos-boot-record.service` 是 `WantedBy=multi-user.target` +
-  `After=multi-user.target`：systemd 会在 multi-user 达成后启动它，所以记录的是
-  "内核启动 → 系统就绪"的总时间，且不会反过来阻塞启动；
-  `/run/oneos-boot-recorded` 保证每次开机只记一条
-- 播放器在动画开始前（填充掩码算完之后）读 `/proc/uptime` 作为 `now`，
-  即当前已经启动到哪一步；预估剩余时间再打 8 折，速度只快不慢
-- 结果：启动快的机器动画几秒内放完，慢的机器保持完整时长；
-  下限 0.9s（约 4.3 倍速），上限是自然时长 3.9s
-- 第一次启动没有历史数据，用 2.0s 的保守默认值
-
-改这些常量在 `crates/oneos-splash/src/main.rs` 顶部：
-`FIRST_BOOT_SECS`（首启时长）、`MIN_SECS`（最快）、`SPEED_MARGIN`（折扣）、
-`HISTORY_WINDOW`（用几次均值）。手动记录一次当前 uptime 可调试：
-
-```sh
-oneos-splash --record        # 追加一条到 /var/lib/oneos/boot-history
-cat /var/lib/oneos/boot-history
-```
+想改时长就调 `crates/oneos-splash/src/main.rs` 顶部的
+`LETTER_SECS`（每字母秒数）、`LETTER_DELAY`（间隔）、`HOLD_SECS`（末尾停留），
+总时长 = `5 × (LETTER_SECS + LETTER_DELAY) - LETTER_DELAY + HOLD_SECS`。
 
 ## 本地预览
 

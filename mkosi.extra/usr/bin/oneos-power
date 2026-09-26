@@ -1,0 +1,17 @@
+#!/bin/sh
+# OneOS 电源菜单：重启 / 关机（fuzzel dmenu，默认选中「取消」防误触）
+set -u
+
+ONEO="${ONEO:-oneos}"
+
+choice=$(printf '%s\n' "取消" "重启" "关机" |
+    fuzzel --dmenu --lines 3 --width 18 --prompt "电源：") || exit 0
+
+case "$choice" in
+    重启)
+        "$ONEO" reboot
+        ;;
+    关机)
+        "$ONEO" poweroff
+        ;;
+esac

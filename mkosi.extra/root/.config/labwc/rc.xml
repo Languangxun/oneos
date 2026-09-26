@@ -16,6 +16,9 @@
     <keybind key="W-e">
       <action name="Execute" command="foot -e oneos-settings"/>
     </keybind>
+    <keybind key="W-x">
+      <action name="Execute" command="oneos-power"/>
+    </keybind>
     <keybind key="W-q">
       <action name="Close"/>
     </keybind>

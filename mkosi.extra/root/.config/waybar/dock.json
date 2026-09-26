@@ -1,0 +1,43 @@
+{
+  "layer": "top",
+  "position": "bottom",
+  "height": 40,
+  "spacing": 6,
+  "modules-left": ["custom/launcher", "custom/terminal", "custom/settings", "wlr/taskbar"],
+  "modules-center": [],
+  "modules-right": ["custom/power"],
+
+  "custom/launcher": {
+    "format": "\uf009",
+    "tooltip": "启动器（Super+D）",
+    "on-click": "fuzzel"
+  },
+
+  "custom/terminal": {
+    "format": "\uf120",
+    "tooltip": "打开终端（Super+Enter）",
+    "on-click": "foot"
+  },
+
+  "custom/settings": {
+    "format": "\uf013",
+    "tooltip": "系统设置面板（Super+E）",
+    "on-click": "foot -e oneos-settings"
+  },
+
+  "custom/power": {
+    "format": "\uf011",
+    "tooltip": "重启 / 关机（Super+X）",
+    "on-click": "oneos-power"
+  },
+
+  "wlr/taskbar": {
+    "format": "{title}",
+    "tooltip-format": "{title}\n{app_id}",
+    "truncate": true,
+    "on-click": "activate",
+    "on-click-middle": "close",
+    "on-click-right": "minimize",
+    "all-outputs": true
+  }
+}

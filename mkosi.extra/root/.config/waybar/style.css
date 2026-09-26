@@ -1,5 +1,5 @@
 * {
-  font-family: "DejaVu Sans Mono", "Noto Sans CJK SC", monospace;
+  font-family: "FontAwesome", "DejaVu Sans Mono", "Noto Sans CJK SC", monospace;
   font-size: 13px;
 }
 
@@ -27,7 +27,8 @@ window#waybar {
 #clock,
 #network,
 #cpu,
-#memory {
+#memory,
+#disk {
   padding: 0 10px;
   color: #c0caf5;
 }
@@ -35,4 +36,17 @@ window#waybar {
 #clock {
   color: #7aa2f7;
   font-weight: bold;
+}
+
+#custom-oneos {
+  padding: 0 12px;
+  margin: 4px 4px;
+  border-radius: 6px;
+  background: #7aa2f7;
+  color: #1b1e2b;
+  font-weight: bold;
+}
+
+#custom-oneos:hover {
+  background: #c0caf5;
 }

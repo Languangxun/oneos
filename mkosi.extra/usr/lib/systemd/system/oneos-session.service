@@ -3,7 +3,7 @@ Description=OneOS Graphical Session
 Documentation=https://github.com/Languangxun/oneos
 Conflicts=getty@tty1.service
 Wants=systemd-udev-settle.service
-After=systemd-udev-settle.service oneos-session-bus.service
+After=systemd-udev-settle.service oneos-session-bus.service oneos-splash.service
 Requires=oneos-session-bus.service
 StartLimitIntervalSec=0
 

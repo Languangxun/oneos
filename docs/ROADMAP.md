@@ -35,11 +35,22 @@
 - [x] OneOS 深色主题与键位（labwc menu.xml + themerc）
 - [x] Apple Hello 风开机动画（Caveat 填充字形 + 墨迹遮罩，仿 InkTrail）
 
-## v0.0.6 自适应动画与设置面板（当前）
+## v0.0.6 自适应动画与设置面板（已完成）
 
-- [x] 开机动画按历史启动耗时自适应加速（预估每次启动时间，动画在登录提示前放完）
+- [x] 开机动画按历史启动耗时自适应加速（v0.0.7 起改为强制完整播放）
 - [x] `oneos-boot-record.service` 把每次启动耗时记到 `/var/lib/oneos/boot-history`
 - [x] 设置面板 `oneos-settings`（whiptail：系统信息 / 主机名 / 时区 / 服务 / 日志 / 电源）
+
+## v0.0.7 桌面栏（当前）
+
+- [x] 顶部状态栏：OneOS 标识 / 工作区 / 时钟 / 网络 / CPU / 内存 / 磁盘
+- [x] 底部 dock：启动器、终端、设置、窗口任务列表（wlr/taskbar）
+- [x] 电源菜单 `oneos-power`（dock 按钮 + `Super+X` + 右键菜单，重启/关机走 oneosd）
+- [x] Font Awesome 图标（`fonts-font-awesome`，状态栏与 dock 用矢量图标）
+- [x] 极光壁纸（`/usr/share/backgrounds/oneos-aurora.jpg`，swaybg -m fill）
+- [x] 鼠标精准定位：QEMU `-machine i8042=off` 关闭 PS/2，只留 virtio-tablet 绝对指针
+- [x] 强制完整播放开机动画（固定约 3.9s，去掉自适应加速与 boot-record 单元；
+      getty 与图形会话都排在动画之后，不允许跳过）
 - [ ] 自研合成器（以 smithay 起步，替代 labwc）
 - [ ] 输入法（需要合成器实现 input-method 协议）
 

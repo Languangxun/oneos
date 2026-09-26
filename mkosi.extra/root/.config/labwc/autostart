@@ -1,4 +1,5 @@
 #!/bin/sh
 
 waybar &
-swaybg -c '#1b1e2b' &
+waybar -c /root/.config/waybar/dock.json -s /root/.config/waybar/dock.css &
+swaybg -i /usr/share/backgrounds/oneos-aurora.jpg -m fill &

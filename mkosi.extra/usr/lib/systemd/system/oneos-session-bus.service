@@ -1,6 +1,7 @@
 [Unit]
 Description=OneOS Session Bus
 Documentation=https://github.com/Languangxun/oneos
+PartOf=oneos-session.service
 
 [Service]
 Type=simple
@@ -9,4 +10,3 @@ RuntimeDirectoryMode=0700
 RuntimeDirectoryPreserve=yes
 ExecStart=/usr/bin/dbus-daemon --session --address=unix:path=/run/oneos-session/bus --nofork --syslog-only
 Restart=on-failure
-PartOf=oneos-session.service

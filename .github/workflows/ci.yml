@@ -16,4 +16,7 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
-      - run: sh -n mkosi.extra/usr/bin/oneos-settings
+      - run: |
+          for script in mkosi.extra/usr/bin/oneos-settings mkosi.extra/usr/bin/oneos-power; do
+            sh -n "$script"
+          done

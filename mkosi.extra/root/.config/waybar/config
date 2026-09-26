@@ -3,9 +3,15 @@
   "position": "top",
   "height": 32,
   "spacing": 8,
-  "modules-left": ["ext/workspaces"],
+  "modules-left": ["custom/oneos", "ext/workspaces"],
   "modules-center": ["clock"],
-  "modules-right": ["network", "cpu", "memory"],
+  "modules-right": ["network", "cpu", "memory", "disk"],
+
+  "custom/oneos": {
+    "format": "\uf2dc OneOS",
+    "tooltip": "打开启动器（Super+D）",
+    "on-click": "fuzzel"
+  },
 
   "ext/workspaces": {
     "format": "{icon}",
@@ -14,24 +20,30 @@
   },
 
   "clock": {
-    "format": "{:%H:%M  %m-%d}",
+    "format": "\uf017 {:%H:%M  %m-%d}",
     "tooltip-format": "{:%Y-%m-%d %A}"
   },
 
   "network": {
-    "format-wifi": "wifi {essid}",
-    "format-ethernet": "{ifname}",
-    "format-disconnected": "offline",
+    "format-wifi": "\uf1eb {essid}",
+    "format-ethernet": "\uf0ac {ifname}",
+    "format-disconnected": "\uf127 offline",
     "tooltip-format": "{ifname} via {gwaddr}"
   },
 
   "cpu": {
-    "format": "CPU {usage}%",
+    "format": "\uf085 {usage}%",
     "interval": 2
   },
 
   "memory": {
-    "format": "MEM {used:0.1f}G/{total:0.1f}G",
+    "format": "\uf233 {used:0.1f}G/{total:0.1f}G",
     "interval": 5
+  },
+
+  "disk": {
+    "format": "\uf0a0 {percentage_used}%",
+    "paths": ["/"],
+    "interval": 30
   }
 }

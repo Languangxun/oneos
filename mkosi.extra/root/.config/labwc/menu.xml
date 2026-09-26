@@ -19,12 +19,12 @@
     <separator/>
     <item label="重启">
       <action name="Execute">
-        <command>systemctl reboot</command>
+        <command>oneos reboot</command>
       </action>
     </item>
     <item label="关机">
       <action name="Execute">
-        <command>systemctl poweroff</command>
+        <command>oneos poweroff</command>
       </action>
     </item>
     <separator/>
